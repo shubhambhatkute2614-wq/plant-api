@@ -1,64 +1,54 @@
 const express = require("express");
 const multer = require("multer");
-const cors = require("cors");
-const axios = require("axios");
+const path = require("path");
 const fs = require("fs");
 
 const app = express();
-app.use(cors());
 
-// Multer setup to store image temporarily
+// Render will give the PORT automatically
+const PORT = process.env.PORT || 3000;
+
+// Uploads folder check (for Render)
+const uploadPath = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath);
+}
+
+// Multer storage
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, "uploads/");
+    destination: function (req, file, cb) {
+        cb(null, uploadPath);
     },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + "-" + file.originalname);
-    }
-});
-const upload = multer({ storage });
-
-// ROOT ROUTE
-app.get("/", (req, res) => {
-    res.send("Plant Disease Diagnosis API is Running 🌱");
-});
-
-// ML Model API (Replace URL with your model’s endpoint)
-const MODEL_API = "https://plant-disease-model.onrender.com/predict";
-
-// Diagnosis Route
-app.post("/diagnose", upload.single("image"), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: "Image is required!" });
-        }
-
-        // Convert image to base64
-        const imageFile = fs.readFileSync(req.file.path, { encoding: "base64" });
-
-        // Call ML Model API
-        const response = await axios.post(MODEL_API, {
-            image: imageFile
-        });
-
-        // Delete image after sending
-        fs.unlinkSync(req.file.path);
-
-        res.json({
-            success: true,
-            disease: response.data.disease,
-            confidence: response.data.confidence
-        });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ 
-            success: false, 
-            message: "Error diagnosing the plant disease" 
-        });
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + path.extname(file.originalname));
     }
 });
 
-app.listen(5000, () => {
-    console.log("🌿 Server running on port 5000");
+// File filter (only images)
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error("Unsupported file type"), false);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter
+});
+
+// API route
+app.post("/upload", upload.single("image"), (req, res) => {
+    res.json({
+        message: "Image uploaded successfully!",
+        file: req.file
+    });
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
